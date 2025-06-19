@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_animate/src/warn.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 import '../flutter_animate.dart';
 
 /// The Flutter Animate library makes adding beautiful animated effects to your widgets
@@ -48,7 +49,7 @@ import '../flutter_animate.dart';
 ///
 /// See [SwapEffect] for one approach to work around this.
 
-// ignore: must_be_immutable
+// ignore: must-be-immutable
 class Animate extends StatefulWidget with AnimateManager<Animate> {
   /// Default duration for effects.
   static Duration defaultDuration = const Duration(milliseconds: 300);
@@ -115,6 +116,7 @@ class Animate extends StatefulWidget with AnimateManager<Animate> {
     this.onPlay,
     this.onComplete,
     bool? autoPlay,
+    this.autoPlayOnVisible = true,
     Duration? delay,
     this.controller,
     this.adapter,
@@ -189,9 +191,13 @@ class Animate extends StatefulWidget with AnimateManager<Animate> {
   /// starting its controller (ie. calling [AnimationController.forward]).
   final bool autoPlay;
 
+  /// Setting [autoPlayOnVisible] to `true` starts the animation when the widget becomes visible.
+  final bool autoPlayOnVisible;
+
   /// Defines a delay before the animation is started. Unlike [Effect.delay],
   /// this is not a part of the overall animation, and only runs once if the
   /// animation is looped. [onPlay] is called after this delay.
+
   final Duration delay;
 
   /// An external [AnimationController] can optionally be specified. By default
@@ -283,6 +289,7 @@ class _AnimateState extends State<Animate> with SingleTickerProviderStateMixin {
   bool _isInternalController = false;
   Adapter? _adapter;
   Future<void>? _delayed;
+  bool _hasPlayedOnVisible = false; // Tracks if animation has started on visibility.
 
   @override
   void initState() {
@@ -397,6 +404,21 @@ class _AnimateState extends State<Animate> with SingleTickerProviderStateMixin {
     for (EffectEntry entry in widget._entries) {
       child = entry.effect.build(context, child, _controller, entry);
     }
+
+    // Wrap the widget in a VisibilityDetector if autoPlayOnVisible is true.
+    if (widget.autoPlayOnVisible) {
+      child = VisibilityDetector(
+        key: Key('Animate-${widget.key ?? hashCode}'),
+        onVisibilityChanged: (info) {
+          if (!_hasPlayedOnVisible && info.visibleFraction > 0) {
+            _hasPlayedOnVisible = true;
+            _play();
+          }
+        },
+        child: child,
+      );
+    }
+
     return reparent?.call(parent, child) ?? child;
   }
 }
@@ -442,3 +464,4 @@ typedef ReparentChildBuilder = Widget Function(Widget parent, Widget child);
 
 /// Function signature for [Animate] callbacks.
 typedef AnimateCallback = void Function(AnimationController controller);
+
